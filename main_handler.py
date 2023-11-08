@@ -7,6 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.state import StatesGroup, State
 import settings
 import pickle
+from datetime import datetime, timedelta
 
 router = Router()
 
@@ -60,21 +61,26 @@ async def choose_day_of_week(callback_query: CallbackQuery):
 
 
 def get_schedule(group_name: str, day: str, pickle_file) -> str:
-    with (open(pickle_file, "rb")) as f:
+    with ((open(pickle_file, "rb")) as f):
         for group in pickle.load(f):
             if group.header is not None:
                 if group_name in group.name:
                     schedule: dict = group.schedule[day]
+                    now = (datetime.now() - timedelta(days=datetime.now().weekday()))
+                    then = (datetime(2023, 9, 2) - timedelta(days=datetime(2023, 9, 2).weekday()))
+                    week_no = int((now - then).days / 7 + 1)
                     #damn
-                    return day + "\n\n" + "".join(["[{}] {}\n\n".format(time, "❌ Нет пары" if course is None else "✅" + course) for time, course in schedule.items()])
+                    return f"💬 День {day}\n💬 Группа {group_name}\n💬 Неделя {week_no}\n\n" + \
+                    "".join(["[{}] {}\n\n".format(time, "❌ Нет пары" if course is None else "✅" + course) for time, course in schedule.items()])
 
 def check_for_group_validity(group: str) -> bool:
-    for i in get_groups(settings.pickle_file):
-        if group in i:
-            return True
-    return False
+    return group in get_groups(settings.pickle_file)
 
 def get_groups(pickle_file) -> list:
     with (open(pickle_file, "rb")) as f:
         data = pickle.load(f)
         return [_.name for _ in data]
+
+
+if __name__=="__main__":
+    print(get_groups(settings.pickle_file))
