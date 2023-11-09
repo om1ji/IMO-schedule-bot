@@ -11,6 +11,6 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    # dump_data_to_pickle()
+    dump_data_to_pickle()
     asyncio.run(main())
     # print(main_handler.get_schedule("04.3-208 (а)", "Понедельник", pickle_file))

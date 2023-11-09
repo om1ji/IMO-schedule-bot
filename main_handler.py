@@ -36,7 +36,7 @@ async def receive_group_name(message: Message, state: FSMContext):
         await message.reply("Выбери день", reply_markup=day_of_week_inline_keyboard)
         await state.clear()
     else:
-        await message.reply("Введи правильный номер группы (04.3-112 например)")
+        await message.reply("Введи правильный номер группы\n\nНапример 04.3-112 или 04.3-205 (а), если есть подгруппа)")
 
 
 @router.callback_query(F.data == "change_group")
