@@ -3,11 +3,12 @@ from common import bot
 from xl_parser import get_schedule, Schedule
 from keyboards import day_of_week_inline_keyboard, cancel_menu, feedback_menu, days_of_week
 from aiogram.types import CallbackQuery
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.state import StatesGroup, State
 import settings
 import pickle
 from datetime import datetime, timedelta
+from sqlite3 import IntegrityError
 
 router = Router()
 
@@ -84,7 +85,7 @@ async def elaborate(callback_query: CallbackQuery, state: FSMContext):
 
 @router.message(Feedback.wait_for_detail)
 async def send_feedback_detail(message: Message, state: FSMContext):
-    db.insert_feedback(message.from_user.id, db.get_group(message.from_user.id), message.text)
+    db.insert_feedback(message.from_user.id, db.get_group(message.from_user.id), message.text, str(message.from_user))
     data = await state.get_data()
     await bot.delete_message(message.chat.id, data["message_to_delete"][0])
     await bot.delete_message(message.chat.id, data["message_to_delete"][1])
@@ -97,8 +98,16 @@ async def send_feedback_detail(message: Message, state: FSMContext):
 async def cast_feedback(message: Message):
     if message.from_user.id in settings.admins:
         for user in db.get_users():
-            await bot.send_message(user, "Бот работает правильно? Верное ли расписание?", reply_markup=feedback_menu)
-            db.insert_feedback(user, db.get_group(user))
+            try:
+                db.insert_feedback(user, db.get_group(user))
+                try:
+                    await bot.send_message(user, "Бот работает правильно? Верное ли расписание?",
+                                           reply_markup=feedback_menu)
+                except TelegramForbiddenError:
+                    print("User " + str(user) + " blocked the bot")
+            except IntegrityError:
+                pass
+
         await bot.send_message(message.from_user.id, "Всем отправил")
     else:
         await bot.delete_message(message.chat.id, message.message_id)
