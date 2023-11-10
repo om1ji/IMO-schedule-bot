@@ -14,8 +14,21 @@ class DB:
                             UNIQUE(user_id)
                             )"""
 
+        feedback_table_query = """CREATE TABLE IF NOT EXISTS feedback(
+                            user_id INTEGER,
+                            gruppa TEXT,
+                            feedback TEXT,
+                            user_data TEXT,
+                            UNIQUE (user_id)
+                            )"""
+
         self._cursor.execute(users_table_query)
+        self._cursor.execute(feedback_table_query)
         self._conn.commit()
+
+    def __del__(self):
+        self._conn.commit()
+        self._conn.close()
 
     def get_all_users(self) -> list:
         self._cursor.execute("SELECT user_id FROM users")
@@ -44,6 +57,22 @@ class DB:
             query = "INSERT INTO users VALUES (?, ?)"
             self._cursor.execute(query, (user.id, None))
             self._conn.commit()
+            
+    def get_users(self):
+        query = "SELECT user_id FROM users"
+        self._cursor.execute(query)
+        result = self._cursor.fetchall()
+        return [user_id[0] for user_id in result]
+
+    def insert_feedback(self, user_id: int, group: str, feedback: str = None, user_data: str = None):
+        if feedback is None:
+            query = "INSERT INTO feedback VALUES (?, ?, ?, ?)"
+            self._cursor.execute(query, (user_id, group, None, None))
+        else:
+            query = "UPDATE feedback SET feedback = ?, user_data = ? WHERE user_id = ?"
+            self._cursor.execute(query, (feedback, user_data, user_id))
+
+        self._conn.commit()
 
 
 db = DB(db_name)

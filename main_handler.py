@@ -1,7 +1,7 @@
 from imports import *
 from common import bot
 from xl_parser import get_schedule, Schedule
-from keyboards import day_of_week_inline_keyboard, cancel_menu
+from keyboards import day_of_week_inline_keyboard, cancel_menu, feedback_menu, days_of_week
 from aiogram.types import CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.state import StatesGroup, State
@@ -14,6 +14,9 @@ router = Router()
 
 class Register(StatesGroup):
     wait_for_group = State()
+
+class Feedback(StatesGroup):
+    wait_for_detail = State()
 
 
 @router.message(Command("start"))
@@ -50,7 +53,8 @@ async def choose_day_of_week(callback_query: CallbackQuery, state: FSMContext):
     await bot.delete_message(callback_query.message.chat.id, callback_query.message.message_id)
     await state.clear()
 
-@router.callback_query()
+
+@router.callback_query(F.data.in_(days_of_week))
 async def choose_day_of_week(callback_query: CallbackQuery):
     user_group = db.get_group(callback_query.from_user.id)
     result = get_schedule(user_group, callback_query.data, settings.pickle_file)
@@ -58,6 +62,50 @@ async def choose_day_of_week(callback_query: CallbackQuery):
         await callback_query.message.edit_text(result, reply_markup=day_of_week_inline_keyboard)
     except TelegramBadRequest:
         pass
+
+
+@router.callback_query(F.data == "yes")
+async def send_feedback_yes_no(callback_query: CallbackQuery):
+    db.insert_feedback(callback_query.from_user.id,
+                       db.get_group(callback_query.from_user.id),
+                       callback_query.data,
+                       str(callback_query.from_user)
+                       )
+    await bot.send_message(callback_query.message.chat.id, "Спасибо за ответ!")
+    await bot.delete_message(callback_query.message.chat.id, callback_query.message.message_id)
+
+
+@router.callback_query(F.data == "no")
+async def elaborate(callback_query: CallbackQuery, state: FSMContext):
+    message = await callback_query.message.answer("Расскажи, что можно улучшить?")
+    await state.update_data(message_to_delete=[callback_query.message.message_id, message.message_id])
+    await state.set_state(Feedback.wait_for_detail)
+
+
+@router.message(Feedback.wait_for_detail)
+async def send_feedback_detail(message: Message, state: FSMContext):
+    db.insert_feedback(message.from_user.id, db.get_group(message.from_user.id), message.text)
+    data = await state.get_data()
+    await bot.delete_message(message.chat.id, data["message_to_delete"][0])
+    await bot.delete_message(message.chat.id, data["message_to_delete"][1])
+    await bot.delete_message(message.chat.id, message.message_id)
+    await message.answer("Спасибо за отзыв!")
+    await state.clear()
+
+
+@router.message(Command("feedback"))
+async def cast_feedback(message: Message):
+    if message.from_user.id in settings.admins:
+        for user in db.get_users():
+            await bot.send_message(user, "Бот работает правильно? Верное ли расписание?", reply_markup=feedback_menu)
+            db.insert_feedback(user, db.get_group(user))
+        await bot.send_message(message.from_user.id, "Всем отправил")
+    else:
+        await bot.delete_message(message.chat.id, message.message_id)
+
+@router.message(Command("me"))
+async def show_json(message: Message):
+    await message.reply(str(message.from_user))
 
 
 def get_schedule(group_name: str, day: str, pickle_file) -> str:
